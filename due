@@ -1,0 +1,210 @@
+#!/usr/bin/env python
+#
+# due:
+#      todo.sh plugin for managing due dates on tasks.
+#
+# Original author: Matthew Zimmerman <matt@triclinic.org>
+# Ths code is public domain. http://unlicense.org/UNLICENSE
+
+import os
+import sys
+import re
+import getopt
+from datetime import *
+import dateutil.parser
+from dateutil.relativedelta import *
+
+TODO_SH=os.environ['TODO_FULL_SH']
+TODO_TXT=os.environ['TODO_FILE']
+
+DUE_PREFIX="due"
+DUE_DATE_PAT=re.compile(DUE_PREFIX+":(\d{4})-(\d{2})-(\d{2})")
+
+def find_item_text(item):
+    """Find the text of the todo.txt line with number 'item'."""
+    i = 0
+    text = ""
+    fh = open(TODO_TXT, 'r')
+    for line in fh:
+        i += 1
+        if i == int(item):
+            text = line.strip()
+            break
+    return text
+
+
+def clear_metadata(text):
+    """Remove the line number, priority and other metadata from a todo line."""
+    text = re.sub('^[0-9]* ', '', text)   # remove line number
+    text = re.sub('^\([A-Z]\)* ', '', text) # remove priority
+    text = text.strip()
+    return text
+
+
+def parsedate(text):
+    """Take a textual representation of a string and turn it into a date() object."""
+
+    # don't do nothin' if it's already a datetime.date object
+    if type(text) == type(date.today()):
+        return text
+
+    # parse the date
+    if text == 'today':
+        d=date.today()
+    elif text == 'tomorrow':
+        d=date.today()+relativedelta(days=+1)
+    elif text == 'yesterday':
+        d=date.today()+relativedelta(days=-1)
+    else:
+        d=dateutil.parser.parse(text, fuzzy=True).date()
+    return d
+
+
+def add(args):
+    """Add a task with a default due date of today."""
+
+    command = TODO_SH+' add "'+' '.join(args)+'"'
+    command += ' '+DUE_PREFIX+':'+str(parsedate("today"))
+    return not os.system(command)
+
+
+def list(args, dueOn="today", dueBefore=False, dueAfter=False):
+    """List all items that match the specified date ranges."""
+
+    # parse arguments
+    dueOnDate = False
+    dueBeforeDate = False
+    dueAfterDate = False
+    if dueOn == 'none' or dueOn == 'never':
+        dueOnDate = 'never'
+    elif dueOn: 
+        dueOnDate = parsedate(dueOn)
+    if dueBefore: dueBeforeDate = parsedate(dueBefore)
+    if dueAfter: dueAfterDate = parsedate(dueAfter)
+
+
+    # read the output of 'todo.sh list' and grep it
+    command = TODO_SH+' ls '+' '.join(args)
+    p = os.popen(command, 'r')
+    for line in p:
+        line=line.strip()
+        match = re.search(DUE_DATE_PAT, line)
+        if match:
+            m = match.groups()
+            d = date(int(m[0]), int(m[1]), int(m[2]))
+            if dueBeforeDate or dueAfterDate:
+                if dueBeforeDate:
+                    if d > dueBeforeDate: continue
+                if dueAfterDate:
+                    if d < dueAfterDate: continue
+                print line.rstrip()
+            else:
+                if dueOnDate != 'never' and d == dueOnDate:
+                    print line.rstrip()
+        else:
+            if dueOnDate == 'never':
+                print line.rstrip()
+    p.close()
+
+
+def set(item, date):
+    """Set the due date on the todo line with item number 'item' to 'date'."""
+
+    date = str(parsedate(date))
+    text = find_item_text(item)
+
+    # build a call to todo.sh
+    if re.search(DUE_DATE_PAT, text):
+        text = re.sub(DUE_DATE_PAT, '', text)
+        text = clear_metadata(text)
+        command = TODO_SH+' replace '+item+' "'+text+'" '+DUE_PREFIX+':'+date
+    else:
+        command = TODO_SH+' append '+item+' '+DUE_PREFIX+':'+date
+
+    # run the todo.sh command
+    return not os.system(command)
+
+
+def summary(args, ndays=7):
+    """XXX"""
+
+    print "--- overdue ---";
+    list(args, dueBefore="yesterday")
+    print
+
+    today = date.today()
+    for n in range(0, ndays-1):
+        d = today + relativedelta(days=n)
+        text = d.strftime("%A %d %b")
+        if n == 0: text += " (today)"
+        print "--- "+text+" ---"
+        list(args, dueOn=d)
+        print
+
+    print "--- due later ---";
+    d = today + relativedelta(days=ndays-1)
+    text = d.strftime("%A %d %b")
+    list(args, dueAfter=d)
+    print
+
+    print "--- no due date---"
+    list(args, dueOn="never")
+
+def unset(item):
+    """Unset the due date on the todo line with item number 'item'."""
+    text = find_item_text(item)
+
+    if re.search(DUE_DATE_PAT, text):
+        text = re.sub(DUE_DATE_PAT, '', text)
+        text = clear_metadata(text)
+        command = TODO_SH+' replace '+item+' "'+text+'"'
+        return not os.system(command)
+    return 1
+
+
+def usage():
+    print """  due <COMMAND> ARGS
+      Manage the due dates for commands.
+
+      due list [-d <DUE_DATE>] ...
+      due set <#ITEM> <DUE_DATE> 
+      due unset <#ITEM>
+"""
+
+if __name__ == "__main__":
+    # process commands 
+    command=""
+    if (len(sys.argv) == 2 and sys.argv[1] == 'usage'): command='usage'
+    if (len(sys.argv) > 2): command=sys.argv[2]
+    args = sys.argv[3:]
+
+    # process options (after the command)
+    duedate="today"
+    opts,args = getopt.getopt(args, 'd:')
+    for o, a in opts:
+        if o == '-d':
+            duedate = a
+
+    # dispatch
+    if command == 'usage':
+        usage()
+    elif command == "":
+        summary(args)
+    elif command == "add":
+        add(args)
+    elif command == 'summary' or command == 'sum':
+        summary(args)
+    elif command == 'list' or command == 'ls':
+        list(args, dueBefore=duedate)
+    elif command == 'set':
+        if len(args) != 2:
+            usage()
+            sys.exit(1)
+        set(args[0], args[1])
+    elif command == 'unset':
+        if len(args) != 1:
+            usage()
+            sys.exit(2)
+        unset(args[0])
+    else:
+        summary([command])
