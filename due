@@ -20,18 +20,13 @@ TODO_TXT=os.environ['TODO_FILE']
 DUE_PREFIX="due"
 DUE_DATE_PAT=re.compile(DUE_PREFIX+":(\d{4})-(\d{2})-(\d{2})")
 
+fh = open(TODO_TXT, 'r')
+lines=[line.strip() for line in fh]
+fh.close()
+
 def find_item_text(item):
     """Find the text of the todo.txt line with number 'item'."""
-    i = 0
-    text = ""
-    fh = open(TODO_TXT, 'r')
-    for line in fh:
-        i += 1
-        if i == int(item):
-            text = line.strip()
-            break
-    return text
-
+    return lines[int(item)-1]
 
 def clear_metadata(text):
     """Remove the line number, priority and other metadata from a todo line."""
@@ -82,7 +77,6 @@ def list(args, dueOn="today", dueBefore=False, dueAfter=False):
     if dueBefore: dueBeforeDate = parsedate(dueBefore)
     if dueAfter: dueAfterDate = parsedate(dueAfter)
 
-
     # read the output of 'todo.sh list' and grep it
     command = TODO_SH+' ls '+' '.join(args)
     p = os.popen(command, 'r')
@@ -97,14 +91,14 @@ def list(args, dueOn="today", dueBefore=False, dueAfter=False):
                     if d > dueBeforeDate: continue
                 if dueAfterDate:
                     if d < dueAfterDate: continue
-                print line.rstrip()
+                print(line.rstrip())
             else:
                 if dueOnDate != 'never' and d == dueOnDate:
-                    print line.rstrip()
+                    print(line.rstrip())
         else:
             if dueOnDate == 'never':
-                print line.rstrip()
-    p.close()
+                print(line.rstrip())
+    #p.close()
 
 
 def set(item, date):
@@ -128,26 +122,26 @@ def set(item, date):
 def summary(args, ndays=7):
     """XXX"""
 
-    print "--- overdue ---";
+    print("--- overdue ---");
     list(args, dueBefore="yesterday")
-    print
+    print("")
 
     today = date.today()
     for n in range(0, ndays-1):
         d = today + relativedelta(days=n)
         text = d.strftime("%A %d %b")
         if n == 0: text += " (today)"
-        print "--- "+text+" ---"
+        print("--- "+text+" ---")
         list(args, dueOn=d)
-        print
+        print("")
 
-    print "--- due later ---";
+    print("--- due later ---");
     d = today + relativedelta(days=ndays-1)
     text = d.strftime("%A %d %b")
     list(args, dueAfter=d)
-    print
+    print("")
 
-    print "--- no due date---"
+    print("--- no due date---")
     list(args, dueOn="never")
 
 def unset(item):
@@ -163,13 +157,13 @@ def unset(item):
 
 
 def usage():
-    print """  due <COMMAND> ARGS
+    print("""  due <COMMAND> ARGS
       Manage the due dates for commands.
 
       due list [-d <DUE_DATE>] ...
       due set <#ITEM> <DUE_DATE> 
       due unset <#ITEM>
-"""
+""")
 
 if __name__ == "__main__":
     # process commands 
