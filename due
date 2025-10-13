@@ -22,7 +22,7 @@ class TodoDue(object):
         self.TODO_TXT=os.environ['TODO_FILE']
 
         self.DUE_PREFIX="due"
-        self.DUE_DATE_PAT=re.compile(self.DUE_PREFIX+":(\d{4})-(\d{2})-(\d{2})")
+        self.DUE_DATE_PAT=re.compile(self.DUE_PREFIX+r':(\d{4})-(\d{2})-(\d{2})')
 
     def _find_item_text(self, item):
         """Find the text of the todo.txt line with number 'item'."""
@@ -33,8 +33,8 @@ class TodoDue(object):
     
     def _clear_metadata(self, text):
         """Remove the line number, priority and other metadata from a todo line."""
-        text = re.sub('^[0-9]* ', '', text)   # remove line number
-        text = re.sub('^\([A-Z]\)* ', '', text) # remove priority
+        text = re.sub(r'^[0-9]* ', '', text)   # remove line number
+        text = re.sub(r'^\([A-Z]\)* ', '', text) # remove priority
         text = text.strip()
         return text
 
